@@ -1,0 +1,10 @@
+{
+	"id": "kanban-auto-linker",
+	"name": "Kanban Auto Linker",
+	"version": "1.0.1",
+	"minAppVersion": "1.0.0",
+	"description": "Automatically adds and removes tasks to/from the Kanban board.",
+	"author": "Operator2024",
+	"authorUrl": "https://github.com/Operator2024",
+	"isDesktopOnly": false
+}
