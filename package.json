@@ -1,6 +1,6 @@
 {
 	"name": "Kanban Auto Linker",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"description": "Automatically adds and removes tasks to/from the Kanban board.",
 	"main": "main.js",
 	"type": "module",
@@ -15,11 +15,13 @@
 	"devDependencies": {
 		"@eslint/js": "^9.39.4",
 		"@obsidian-typings/obsidian-public-1.12.7": "^6.29.0",
+		"@types/i18next": "^12.1.0",
 		"@types/node": "^22.15.17",
 		"esbuild": "0.25.5",
 		"eslint": "^9.39.4",
 		"eslint-plugin-obsidianmd": "^0.4.0",
 		"globals": "^17.6.0",
+		"i18next": "^26.4.2",
 		"jiti": "^2.6.1",
 		"obsidian": "^1.13.1",
 		"typescript": "^5.8.3",

@@ -1,15 +1,28 @@
 import { Notice, Plugin, TAbstractFile, TFile } from 'obsidian';
 import { DEFAULT_SETTINGS, KanbanLinkerSettings, KanbanLinkerSettingTab } from './settings';
+import { PluginTranslator } from './i18n';
 
 export default class KanbanAutoLinker extends Plugin {
   settings!: KanbanLinkerSettings;
-  private isReady = false; // Флаг для защиты от ложных срабатываний при старте
+  translator!: PluginTranslator;
+  private isReady = false;
 
   async onload() {
     await this.loadSettings();
+
+    this.translator = new PluginTranslator(this.settings.language);
+
     this.addSettingTab(new KanbanLinkerSettingTab(this.app, this));
 
-    // Разрешаем работу плагина только после того, как Obsidian полностью загрузит хранилище
+    this.addCommand({
+      id: 'open-settings',
+      name: this.translator.t('command-open-settings'),
+      callback: () => {
+        this.app.setting.open();
+        this.app.setting.openTabById(this.manifest.id);
+      }
+    });
+
     this.app.workspace.onLayoutReady(() => {
       // Небольшая задержка в 3 секунды, чтобы завершился внутренний поиск/индексация файлов Obsidian
       window.setTimeout(() => {
@@ -18,7 +31,6 @@ export default class KanbanAutoLinker extends Plugin {
       }, 3000);
     });
 
-    // 1. СОЗДАНИЕ ФАЙЛА
     this.registerEvent(
       this.app.vault.on('create', (file: TAbstractFile) => {
         void (async () => {
@@ -33,35 +45,17 @@ export default class KanbanAutoLinker extends Plugin {
       })
     );
 
-    // 2. УДАЛЕНИЕ ФАЙЛА
     this.registerEvent(
       this.app.vault.on('delete', (file: TAbstractFile) => {
         void (async () => {
           if (!this.isReady) return;
           if (this.isTargetFile(file) && file instanceof TFile) {
-            await this.removeFileFromKanban((file).basename);
+            await this.removeFileFromKanban(file);
           }
         })();
       })
     );
 
-    // 3. ПЕРЕИМЕНОВАНИЕ ФАЙЛА
-    // this.registerEvent(
-    //   this.app.vault.on('rename', (file: TAbstractFile, oldPath: string) => {
-    //     void (async () => {
-    //       if (!this.isReady) return;
-    //       if (this.isTargetFile(file) && !await this.hasFileInKanban((file as TFile).basename)) {
-    //         const oldBaseName = oldPath.split('/').pop()?.replace('.md', '');
-    //         const config = this.app.vault.config.alwaysUpdateLinks;
-    //         // this.app.vault.getConfig('alwaysUpdateLinks');
-    //         console.log('alwaysUpdateLinks', config, oldBaseName);
-    //         if (oldBaseName) {
-    //           await this.renameFileInKanban(oldBaseName, (file as TFile).basename);
-    //         }
-    //       }
-    //     })();
-    //   })
-    // );
   }
 
   /**
@@ -97,26 +91,16 @@ export default class KanbanAutoLinker extends Plugin {
 
   /**
    *
-   * @returns Promise<string> - Возвращает содержимое файла доски Kanban в виде строки.
-   * Если файл не найден, выбрасывает ошибку.
-   */
-  private async getKanbanContent(): Promise<string> {
-    const kanbanFile = await this.getKanbanFile();
-    return await this.app.vault.read(kanbanFile);
-  }
-
-  /**
-   *
    * @param fileName - Имя файла задачи (без расширения .md)
    * @returns Promise<boolean> - Возвращает true, если файл уже упомянут на доске Kanban, иначе false.
    * Если произошла ошибка при чтении файла доски, возвращает true (чтобы предотвратить добавление дубликатов).
    */
   private async hasFileInKanban(fileName: string): Promise<boolean> {
     try {
-      let content = await this.getKanbanContent();
+      const kanbanFile = await this.getKanbanFile();
+      let content = await this.app.vault.read(kanbanFile);
       const taskLink = `[[${fileName}]]`;
 
-      // Проверка: Если такая заметка уже упомянута на доске (в любой колонке)
       if (content.includes(taskLink)) {
         new Notice(`[kanban linker] Заметка "${fileName}" уже есть на доске! Дублирование невозможно.`, 5000);
         return true;
@@ -137,22 +121,9 @@ export default class KanbanAutoLinker extends Plugin {
    */
   // Функция: Добавление задачи на доску (с проверкой дубликатов)
   async addFileToKanban(fileName: string) {
-    // const cleanKanbanPath = this.settings.kanbanPath.trim().replace(/^\/+/g, '');
     const kanbanFile = await this.getKanbanFile();
-
-    // if (!(kanbanFile instanceof TFile)) {
-    //   new Notice(`[kanban linker] Ошибка: Доска не найдена по пути "${cleanKanbanPath}"`);
-    //   return;
-    // }
-
     let content = await this.app.vault.read(kanbanFile);
     const taskLink = `[[${fileName}]]`;
-
-    // Проверка: Если такая заметка уже упомянута на доске (в любой колонке)
-    // if (content.includes(taskLink)) {
-    //   new Notice(`[kanban linker] Заметка "${fileName}" уже есть на доске! Дублирование невозможно.`, 5000);
-    //   return;
-    // }
 
     const columnHeader = this.settings.targetColumn.trim();
     if (!content.includes(columnHeader)) {
@@ -168,31 +139,32 @@ export default class KanbanAutoLinker extends Plugin {
 
   /**
    *
-   * @param fileName - Имя файла задачи (без расширения .md)
+   * @param file - Объект TFile задачи, которую нужно удалить с доски Kanban.
    * @returns Promise<void> - Удаляет задачу с доски Kanban, если она находится в рабочей колонке.
    * Если задача находится в игнорируемой колонке, выводит уведомление и не удаляет её. Если задача не найдена на доске, ничего не делает.
    */
   // Функция: Умное удаление задачи с доски
-  async removeFileFromKanban(fileName: string) {
+  async removeFileFromKanban(file: TFile) {
     const kanbanFile = await this.getKanbanFile();
 
     let content = await this.app.vault.read(kanbanFile);
-    const taskLink = `[[${fileName}]]`;
+    let taskLink = "";
 
-    // Если ссылки вообще нет в файле — ничего не делаем
-    if (!content.includes(taskLink)) return;
+    for (const record of [`[[${file.basename}]]`, `[[${file.path.split('.')[0]}]]`]) {
+      if (content.includes(record)) {
+        taskLink = record;
+        break;
+      }
+    }
 
-    // Разбиваем файл на массив строк (убирая \r для Windows)
+    if (!taskLink) return;
+
     const lines = content.replace(/\r/g, '').split('\n');
-
-    // Получаем чистый список игнорируемых колонок
     const ignoredColumns = this.settings.ignoredColumns.split(',').map(col => col.trim());
-
-    // Ищем индекс строки, в которой есть ссылка на нашу задачу
     const targetLineIndex = lines.findIndex(line => line.includes(taskLink));
+
     if (targetLineIndex === -1) return;
 
-    // Ищем заголовок колонки: идём от нашей строки вверх до первой строки с "## "
     let columnName = "";
     for (let i = targetLineIndex; i >= 0; i--) {
       const line = lines[i];
@@ -202,7 +174,6 @@ export default class KanbanAutoLinker extends Plugin {
       }
     }
 
-    // Проверяем, нужно ли игнорировать эту колонку (например, ## Done)
     const isIgnored = ignoredColumns.some(ignoredCol => columnName.startsWith(ignoredCol));
 
     if (isIgnored) {
@@ -210,12 +181,10 @@ export default class KanbanAutoLinker extends Plugin {
       return;
     }
 
-    // Если колонка рабочая — просто удаляем эту конкретную строку из массива
     lines.splice(targetLineIndex, 1);
 
-    // Собираем файл обратно и сохраняем
     await this.app.vault.modify(kanbanFile, lines.join('\n'));
-    new Notice(`[kanban linker] Задача "${fileName}" удалена с доски.`);
+    new Notice(`[kanban linker] Задача "${file.basename}" удалена с доски.`);
   }
 
   /**
