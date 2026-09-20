@@ -1,7 +1,7 @@
 {
 	"id": "kanban-auto-linker",
 	"name": "Kanban Auto Linker",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"minAppVersion": "1.8.7",
 	"description": "Automatically adds and removes tasks to/from the Kanban board.",
 	"author": "Operator2024",
