@@ -174,7 +174,7 @@ export default class KanbanAutoLinker extends Plugin {
       }
     }
 
-    const isIgnored = ignoredColumns.some(ignoredCol => columnName.startsWith(ignoredCol));
+    const isIgnored = ignoredColumns.some(ignoredCol => columnName.includes(ignoredCol));
 
     if (isIgnored) {
       new Notice(`[kanban linker] Файл не удален с доски, т.к. находится в игнорируемом столбце.`);
